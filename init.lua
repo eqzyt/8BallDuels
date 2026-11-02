@@ -1,12 +1,24 @@
 -- init.lua
 if _G.__CueBotKill then pcall(_G.__CueBotKill) end
 
-local State      = require(script.src.state)
-local Match      = require(script.src.match)(State)
-local Planner    = require(script.src.planner)(State, Match)
-local Overlay    = require(script.src.overlay)(State)
-local BotActions = require(script.src.bot)(State, Match, Overlay)
-require(script.src.ui)(State, Match)
+-- Carrega os módulos direto da pasta workspace/src/ do executor
+local function loadModule(name)
+    local path = "src/" .. name .. ".lua"
+    if isfile and isfile(path) then
+        return loadfile(path)()
+    elseif script and script:FindFirstChild("src") and script.src:FindFirstChild(name) then
+        return require(script.src[name])
+    else
+        error("Modulo nao encontrado: " .. path .. " (Coloque a pasta 'src' dentro da pasta 'workspace' do seu executor)")
+    end
+end
+
+local State      = loadModule("state")
+local Match      = loadModule("match")(State)
+local Planner    = loadModule("planner")(State, Match)
+local Overlay    = loadModule("overlay")(State)
+local BotActions = loadModule("bot")(State, Match, Overlay)
+loadModule("ui")(State, Match)
 
 local RunService          = State.RunService
 local UserInputService    = State.UserInputService
@@ -26,7 +38,6 @@ task.spawn(function()
             if Config.Enabled then
                 local mc = Match.findMC()
                 if not mc then
-                    -- Fila automática (ex: NineBall_Spain)
                     firesignal(PoolRemotes.OnClientEvent, "Queued", "NineBall_Spain", 0, 550000, 206)
                     PoolRemotes:FireServer("LocalMatch", true)
                 end
