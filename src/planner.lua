@@ -18,7 +18,7 @@ return function(State, Match)
         local len = d.Magnitude
         if len < 0.001 then return true end
         local dir = d / len
-        local thresh = BALL_DIAM * 0.9
+        local thresh = BALL_DIAM * 0.95
         for _, n in sim.Order do
             local b = sim.Balls[n]
             if b and not b.Pocketed and n ~= skip1 and n ~= skip2 then
@@ -203,27 +203,27 @@ return function(State, Match)
 
     function Planner.scoreResult(mc, res, cand, power)
         local sc = 0
-        if not res.FirstHit then return -100 end
-        if not res.Legal    then return -60  end
+        if not res.FirstHit then return -1000 end
+        if not res.Legal    then return -800  end
         if cand then
             if res.TargetPotted then
-                sc += 60
+                sc += 300
                 if res.TargetPocketId ~= nil
                     and tostring(res.TargetPocketId) == tostring(cand.PocketId) then
-                    sc += 10
+                    sc += 80
                 elseif PoolRules.NeedsCall(mc.Rules, mc.Simulation) then
-                    return -180
+                    return -500
                 end
             else
-                sc -= 12
+                sc -= 50
             end
         end
-        sc += res.OwnPots * 15
-        sc -= res.OppPots * 12
-        if res.Scratched then sc -= 20 end
+        sc += res.OwnPots * 250
+        sc -= res.OppPots * 300
+        if res.Scratched then sc -= 600 end
         if res.EightPot then
             if Match.isNineBall(mc) then
-                sc += (res.Scratched and -100 or 60)
+                sc += (res.Scratched and -800 or 400)
             else
                 local calledPocketMatches = cand
                     and res.EightPocketId ~= nil
@@ -231,23 +231,12 @@ return function(State, Match)
                 local callRequired = PoolRules.NeedsCall(mc.Rules, mc.Simulation)
                 local validEightPot = Match.onEight(mc) and not res.Scratched
                     and (not callRequired or calledPocketMatches)
-                sc += validEightPot and 80 or -150
+                sc += validEightPot and 600 or -800
             end
-        end
-        if res.RestPos then
-            local best = 0
-            for _, n in res.Trial.Order do
-                local b = res.Trial.Balls[n]
-                if b and not b.Pocketed and n ~= CUEBALL then
-                    local d = (b.Position - res.RestPos).Magnitude
-                    best = math.max(best, 1 - math.clamp(d / PoolGeometry.HalfWidth, 0, 1))
-                end
-            end
-            sc += best * 6
         end
         if cand then
-            sc += cand.Quality * 4 - cand.Distance / 250
-            if not cand.Clear then sc -= 10 end
+            sc += (1 - math.clamp(cand.Distance / 800, 0, 1)) * 50
+            if not cand.Clear then sc -= 100 end
         end
         return sc
     end
@@ -279,10 +268,10 @@ return function(State, Match)
                     Target = headBall,
                     PocketId = nil,
                     Direction = (pos - cuePos).Unit,
-                    Power = 1,
+                    Power = 0.95,
                     Spin = Vector2.zero,
                     Quality = 1,
-                    Score = 50,
+                    Score = 100,
                     OwnPots = 0,
                     IsBreak = true,
                     IsBankShot = false,
@@ -318,9 +307,9 @@ return function(State, Match)
                         local objectDir = toP.Unit
                         local ghost = tp - objectDir * BALL_DIAM
                         local toG = ghost - cuePos
-                        if toG.Magnitude > BALL_DIAM * 0.5 then
+                        if toG.Magnitude > BALL_DIAM * 0.4 then
                             local q = toG.Unit:Dot(objectDir)
-                            if q > 0.08 then
+                            if q > 0.05 then
                                 local cueClear = Planner.pathClear(sim, cuePos, ghost, CUEBALL, tn)
                                 local objectClear = Planner.pathClear(sim, tp, pk.MouthCentre, CUEBALL, tn)
                                 local clear = cueClear and objectClear
@@ -337,129 +326,26 @@ return function(State, Match)
                             end
                         end
                     end
-
-                    for _, rail in rails do
-                        local mirroredPocket
-                        if rail.Axis == "X" then
-                            mirroredPocket = Vector2.new(
-                                2 * rail.Value - pk.MouthCentre.X,
-                                pk.MouthCentre.Y
-                            )
-                        else
-                            mirroredPocket = Vector2.new(
-                                pk.MouthCentre.X,
-                                2 * rail.Value - pk.MouthCentre.Y
-                            )
-                        end
-
-                        local ray = mirroredPocket - tp
-                        local denominator = rail.Axis == "X" and ray.X or ray.Y
-                        if math.abs(denominator) > 0.001 then
-                            local startAxis = rail.Axis == "X" and tp.X or tp.Y
-                            local t = (rail.Value - startAxis) / denominator
-                            if t > 0.001 and t < 0.999 then
-                                local bankPoint = tp + ray * t
-                                local insideRailSegment
-                                if rail.Axis == "X" then
-                                    insideRailSegment = bankPoint.Y > -halfH + railMargin
-                                        and bankPoint.Y < halfH - railMargin
-                                else
-                                    insideRailSegment = bankPoint.X > -halfW + railMargin
-                                        and bankPoint.X < halfW - railMargin
-                                end
-
-                                local nearPocketOpening = false
-                                if insideRailSegment then
-                                    for _, otherPocket in POCKETS do
-                                        if (bankPoint - otherPocket.MouthCentre).Magnitude < BALL_DIAM * 1.35 then
-                                            nearPocketOpening = true
-                                            break
-                                        end
-                                    end
-                                end
-
-                                if insideRailSegment and not nearPocketOpening then
-                                    local objectDir = bankPoint - tp
-                                    if objectDir.Magnitude > 0.001 then
-                                        objectDir = objectDir.Unit
-                                        local ghost = tp - objectDir * BALL_DIAM
-                                        local toG = ghost - cuePos
-                                        if toG.Magnitude > BALL_DIAM * 0.5 then
-                                            local q = toG.Unit:Dot(objectDir)
-                                            if q > 0.08 then
-                                                local cueClear = Planner.pathClear(sim, cuePos, ghost, CUEBALL, tn)
-                                                local firstLegClear = Planner.pathClear(sim, tp, bankPoint, CUEBALL, tn)
-                                                local secondLegClear = Planner.pathClear(sim, bankPoint, pk.MouthCentre, CUEBALL, tn)
-                                                if cueClear and firstLegClear and secondLegClear then
-                                                    table.insert(bankCands, {
-                                                        Target = tn,
-                                                        PocketId = pk.Id,
-                                                        Direction = toG.Unit,
-                                                        Quality = q,
-                                                        Distance = toG.Magnitude
-                                                            + (bankPoint - tp).Magnitude
-                                                            + (pk.MouthCentre - bankPoint).Magnitude,
-                                                        Clear = true,
-                                                        Object = tp,
-                                                        IsBankShot = true,
-                                                        BankRail = rail.Name,
-                                                        BankPoint = bankPoint,
-                                                    })
-                                                end
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
                 end
             end
         end
 
-        local function sortCandidates(list)
-            table.sort(list, function(a, b)
-                if a.Clear ~= b.Clear then return a.Clear end
-                if a.IsBankShot ~= b.IsBankShot then return not a.IsBankShot end
-                return (a.Quality * 10 - a.Distance / 200)
-                    > (b.Quality * 10 - b.Distance / 200)
-            end)
-        end
-        sortCandidates(cands)
-        sortCandidates(bankCands)
+        local powers = { 0.35, 0.50, 0.65, 0.80, 0.95 }
+        local best, bestScore = nil, -math.huge
 
-        local powers
-        if Config.PowerMode == "Soft" then
-            powers = { 0.30, 0.40, 0.50 }
-        elseif Config.PowerMode == "Medium" then
-            powers = { 0.50, 0.65, 0.78 }
-        elseif Config.PowerMode == "Hard" then
-            powers = { 0.75, 0.88, 0.98 }
-        else
-            powers = { 0.35, 0.50, 0.65, 0.80, 0.95 }
-        end
+        for _, c in cands do
+            for _, pw in powers do
+                local res = Planner.evalShot(mc, c.Direction, pw, Vector2.zero, c.Target)
+                if Match.onEight(mc) and c.Target == EIGHTBALL and res.EightPot
+                    and PoolRules.NeedsCall(mc.Rules, mc.Simulation)
+                    and (res.EightPocketId == nil or tostring(res.EightPocketId) ~= tostring(c.PocketId)) then
+                    continue
+                end
 
-        local function evaluateCandidates(list, limit)
-            local best, bestScore = nil, -math.huge
-            local bestPot, bestPotScore = nil, -math.huge
-            for i = 1, math.min(#list, limit) do
-                local c = list[i]
-                for _, pw in powers do
-                    local res = Planner.evalShot(mc, c.Direction, pw, Vector2.zero, c.Target)
-
-                    if Match.onEight(mc) and c.Target == EIGHTBALL and res.EightPot
-                        and PoolRules.NeedsCall(mc.Rules, mc.Simulation)
-                        and (res.EightPocketId == nil
-                            or tostring(res.EightPocketId) ~= tostring(c.PocketId)) then
-                        continue
-                    end
-
-                    local score = Planner.scoreResult(mc, res, c, pw)
-                    if c.IsBankShot then
-                        score -= 5
-                    end
-
-                    local result = {
+                local score = Planner.scoreResult(mc, res, c, pw)
+                if score > bestScore then
+                    bestScore = score
+                    best = {
                         Target = c.Target,
                         PocketId = c.PocketId,
                         Direction = c.Direction,
@@ -475,60 +361,36 @@ return function(State, Match)
                         EightPocketId = res.EightPocketId,
                         Legal = res.Legal,
                         TargetPotted = res.TargetPotted,
-                        IsBankShot = c.IsBankShot == true,
-                        BankRail = c.BankRail,
-                        BankPoint = c.BankPoint,
+                        IsBankShot = false,
                     }
-
-                    if score > bestScore then
-                        bestScore = score
-                        best = result
-                    end
-                    if res.TargetPotted and res.Legal and not res.Scratched
-                        and score > -50 and score > bestPotScore then
-                        bestPotScore = score
-                        bestPot = result
-                    end
                 end
             end
-            return best, bestScore, bestPot, bestPotScore
         end
 
-        local best, bestScore, directPot = evaluateCandidates(cands, 14)
-        if directPot then
-            best, bestScore = directPot, directPot.Score
-        elseif Config.BankShotFallback then
-            local bankBest, bankScore, bankPot = evaluateCandidates(bankCands, 18)
-            if bankPot then
-                best, bestScore = bankPot, bankPot.Score
-            elseif (not best or bestScore < -50) and bankBest and bankScore > bestScore then
-                best, bestScore = bankBest, bankScore
-            end
-        end
-
-        if (not best or bestScore < -50) and not Match.onEight(mc) then
-            local nearestDistance, nearestBall = math.huge, nil
-            for _, n in targets do
-                local ball = sim.Balls[n]
+        if not best or bestScore < 0 then
+            for _, tn in targets do
+                local ball = sim.Balls[tn]
                 if ball and not ball.Pocketed then
-                    local distance = (ball.Position - cuePos).Magnitude
-                    if distance < nearestDistance then
-                        nearestBall, nearestDistance = n, distance
+                    for _, pk in POCKETS do
+                        local toP = (pk.MouthCentre - ball.Position).Unit
+                        local ghost = ball.Position - toP * BALL_DIAM
+                        local toG = (ghost - cuePos)
+                        if toG.Magnitude > 0.01 then
+                            return {
+                                Target = tn,
+                                PocketId = pk.Id,
+                                Direction = toG.Unit,
+                                Power = 0.5,
+                                Spin = Vector2.zero,
+                                Quality = 0.1,
+                                Score = -1,
+                                OwnPots = 0,
+                                Fallback = true,
+                                IsBankShot = false,
+                            }
+                        end
                     end
                 end
-            end
-            if nearestBall then
-                best = {
-                    Target = nearestBall,
-                    Direction = (sim.Balls[nearestBall].Position - cuePos).Unit,
-                    Power = 0.45,
-                    Spin = Vector2.zero,
-                    Quality = 0.3,
-                    Score = -10,
-                    OwnPots = 0,
-                    Fallback = true,
-                    IsBankShot = false,
-                }
             end
         end
 
@@ -542,7 +404,7 @@ return function(State, Match)
         local bestS = -math.huge
         local hw = PoolGeometry.HalfWidth  - BALL_RAD * 2
         local hh = PoolGeometry.HalfHeight - BALL_RAD * 2
-        local step = BALL_DIAM * 2.5
+        local step = BALL_DIAM * 2
         for x = -hw, hw, step do
             for y = -hh, hh, step do
                 local pos = Vector2.new(x, y)
@@ -568,9 +430,8 @@ return function(State, Match)
                                         local tg = gh - pos
                                         if tg.Magnitude > BALL_DIAM then
                                             local q = tg.Unit:Dot(tp.Unit)
-                                            if q > 0.2 and Planner.pathClear(sim, pos, gh, CUEBALL, n)
-                                                and Planner.pathClear(sim, b.Position, pk.MouthCentre, CUEBALL, n) then
-                                                sc = math.max(sc, q * (1 - tg.Magnitude / 500))
+                                            if q > 0.1 and Planner.pathClear(sim, pos, gh, CUEBALL, n) then
+                                                sc = math.max(sc, q)
                                             end
                                         end
                                     end
