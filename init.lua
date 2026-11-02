@@ -1,12 +1,20 @@
--- init.lua
+local BASE_URL = "https://raw.githubusercontent.com/eqzyt/8BallDuels/bot-dsc/src/"
+
+local function loadModule(name)
+    local src = game:HttpGet(BASE_URL .. name .. ".lua")
+    local fn, err = loadstring(src, name)
+    assert(fn, "Erro ao carregar modulo " .. name .. ": " .. tostring(err))
+    return fn()
+end
+
 if _G.__CueBotKill then pcall(_G.__CueBotKill) end
 
-local State      = require(script.src.state)
-local Match      = require(script.src.match)(State)
-local Planner    = require(script.src.planner)(State, Match)
-local Overlay    = require(script.src.overlay)(State)
-local BotActions = require(script.src.bot)(State, Match, Overlay)
-require(script.src.ui)(State, Match)
+local State      = loadModule("state")
+local Match      = loadModule("match")(State)
+local Planner    = loadModule("planner")(State, Match)
+local Overlay    = loadModule("overlay")(State)
+local BotActions = loadModule("bot")(State, Match, Overlay)
+loadModule("ui")(State, Match)
 
 local RunService          = State.RunService
 local UserInputService    = State.UserInputService
@@ -63,7 +71,9 @@ Connections[#Connections + 1] = RunService.Heartbeat:Connect(function(dt)
         return
     end
     if not Match.myTurn(mc) then
-        Bot.Status = "Opponent's Turn"; Bot.Pending = false; return
+        Bot.Status = "Opponent's Turn"
+        Bot.Pending = false
+        return
     end
 
     if Bot.Pending then return end
