@@ -1,12 +1,21 @@
--- init.lua
+-- src/init.lua (ou atualize o seu init.lua no GitHub)
 if _G.__CueBotKill then pcall(_G.__CueBotKill) end
 
-local State      = require(script.src.state)
-local Match      = require(script.src.match)(State)
-local Planner    = require(script.src.planner)(State, Match)
-local Overlay    = require(script.src.overlay)(State)
-local BotActions = require(script.src.bot)(State, Match, Overlay)
-require(script.src.ui)(State, Match)
+local BASE_URL = "https://raw.githubusercontent.com/eqzyt/8BallDuels/bot-dsc/src/"
+
+local function loadModule(name)
+    local src = game:HttpGet(BASE_URL .. name .. ".lua")
+    local fn, err = loadstring(src, name)
+    assert(fn, "Erro ao carregar modulo " .. name .. ": " .. tostring(err))
+    return fn()
+end
+
+local State      = loadModule("state")
+local Match      = loadModule("match")(State)
+local Planner    = loadModule("planner")(State, Match)
+local Overlay    = loadModule("overlay")(State)
+local BotActions = loadModule("bot")(State, Match, Overlay)
+loadModule("ui")(State, Match)
 
 local RunService          = State.RunService
 local UserInputService    = State.UserInputService
@@ -18,7 +27,6 @@ local waitForReaction     = State.waitForReaction
 
 local PoolRemotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Pool")
 
--- Eventos automáticos de fila, partida e cartas
 task.spawn(function()
     while Bot.Alive do
         task.wait(1)
@@ -26,7 +34,6 @@ task.spawn(function()
             if Config.Enabled then
                 local mc = Match.findMC()
                 if not mc then
-                    -- Fila automática (ex: NineBall_Spain)
                     firesignal(PoolRemotes.OnClientEvent, "Queued", "NineBall_Spain", 0, 550000, 206)
                     PoolRemotes:FireServer("LocalMatch", true)
                 end
@@ -35,7 +42,6 @@ task.spawn(function()
     end
 end)
 
--- Escolha automática de cartas no fim da partida
 Connections[#Connections + 1] = PoolRemotes.OnClientEvent:Connect(function(action, data)
     if action == "CardPicked" then
         pcall(function()
