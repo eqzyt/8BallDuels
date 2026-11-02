@@ -1,16 +1,28 @@
 -- init.lua
 if _G.__CueBotKill then pcall(_G.__CueBotKill) end
 
--- Carrega os módulos direto da pasta workspace/src/ do executor
 local function loadModule(name)
-    local path = "src/" .. name .. ".lua"
-    if isfile and isfile(path) then
-        return loadfile(path)()
-    elseif script and script:FindFirstChild("src") and script.src:FindFirstChild(name) then
-        return require(script.src[name])
-    else
-        error("Modulo nao encontrado: " .. path .. " (Coloque a pasta 'src' dentro da pasta 'workspace' do seu executor)")
+    local paths = {
+        "src/" .. name .. ".lua",
+        "src\\" .. name .. ".lua",
+        "CueBot/src/" .. name .. ".lua",
+        name .. ".lua"
+    }
+    if isfile and loadfile then
+        for _, p in ipairs(paths) do
+            local ok, exists = pcall(isfile, p)
+            if ok and exists then
+                return loadfile(p)()
+            end
+        end
     end
+    if typeof(script) == "Instance" then
+        local srcFolder = script:FindFirstChild("src")
+        if srcFolder and srcFolder:FindFirstChild(name) then
+            return require(srcFolder[name])
+        end
+    end
+    error("[555] Arquivo '" .. name .. ".lua' nao encontrado! Coloque a pasta 'src' dentro da pasta 'workspace' do seu executor (ou me mande os 6 arquivos aqui no chat para eu juntar tudo em 1 script so).")
 end
 
 local State      = loadModule("state")
