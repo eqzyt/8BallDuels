@@ -87,30 +87,6 @@ return function(State, Match, Overlay)
                     false, true, call)
             end)
             task.wait(0.05)
-        elseif Config.AimStyle == "Stepped" then
-            local fromDirection = readCurrentAim(mc, targetDirection)
-            local startAngle = math.atan2(fromDirection.Y, fromDirection.X)
-            local targetAngle = math.atan2(targetDirection.Y, targetDirection.X)
-            local angleDiff = (targetAngle - startAngle + math.pi) % (2 * math.pi) - math.pi
-            local steps = math.clamp(math.floor(math.deg(math.abs(angleDiff)) / 15), 2, 6)
-
-            for i = 1, steps do
-                if not Bot.Alive or not Config.Enabled then return false end
-                local alpha = i / steps
-                local currentAngle = startAngle + angleDiff * alpha
-                local dir = Vector2.new(math.cos(currentAngle), math.sin(currentAngle)).Unit
-
-                applyLocalAimVisuals(mc, cp, dir, 0)
-                pcall(function()
-                    RemoteSignals.FireServer(RemoteEnums.Pool, "Aim",
-                        dir.X, dir.Y,
-                        shot.Power,
-                        spin.X, spin.Y,
-                        cp.X, cp.Y,
-                        false, true, call)
-                end)
-                task.wait(0.04)
-            end
         else
             local fromDirection = readCurrentAim(mc, targetDirection)
             local startAngle = math.atan2(fromDirection.Y, fromDirection.X)
@@ -123,9 +99,9 @@ return function(State, Match, Overlay)
                 angleDiff = offset
             end
 
-            local baseDuration = Config.AimDuration or 0.65
-            local angleFactor = math.clamp(math.abs(angleDiff) / math.pi, 0.35, 1.25)
-            local duration = math.clamp(baseDuration * angleFactor * Randomizer:NextNumber(0.9, 1.12), 0.28, 1.2)
+            local baseDuration = Config.AimDuration or 0.45
+            local angleFactor = math.clamp(math.abs(angleDiff) / math.pi, 0.2, 1.0)
+            local duration = math.clamp(baseDuration * angleFactor, 0.15, 0.8)
 
             local startTime = os.clock()
             local lastNetworkSend = 0
@@ -141,7 +117,7 @@ return function(State, Match, Overlay)
 
                 applyLocalAimVisuals(mc, cp, dir, 0)
 
-                if now - lastNetworkSend >= 0.05 or t >= 1 then
+                if now - lastNetworkSend >= 0.03 or t >= 1 then
                     lastNetworkSend = now
                     pcall(function()
                         RemoteSignals.FireServer(RemoteEnums.Pool, "Aim",
@@ -157,7 +133,7 @@ return function(State, Match, Overlay)
                 RunService.Heartbeat:Wait()
             end
 
-            local chargeDuration = math.clamp(0.18 + shot.Power * 0.22, 0.18, 0.42)
+            local chargeDuration = math.clamp(0.1 + shot.Power * 0.15, 0.1, 0.3)
             local chargeStart = os.clock()
             while true do
                 if not Bot.Alive or not Config.Enabled or not Match.myTurn(mc) then return false end
@@ -172,7 +148,7 @@ return function(State, Match, Overlay)
             end
         end
 
-        task.wait(0.06)
+        task.wait(0.02)
 
         local ok = pcall(function()
             RemoteSignals.FireServer(RemoteEnums.Pool, "Shot",
