@@ -1,20 +1,12 @@
-local BASE_URL = "https://raw.githubusercontent.com/eqzyt/8BallDuels/bot-dsc/src/"
-
-local function loadModule(name)
-    local src = game:HttpGet(BASE_URL .. name .. ".lua")
-    local fn, err = loadstring(src, name)
-    assert(fn, "Erro ao carregar modulo " .. name .. ": " .. tostring(err))
-    return fn()
-end
-
+-- init.lua
 if _G.__CueBotKill then pcall(_G.__CueBotKill) end
 
-local State      = loadModule("state")
-local Match      = loadModule("match")(State)
-local Planner    = loadModule("planner")(State, Match)
-local Overlay    = loadModule("overlay")(State)
-local BotActions = loadModule("bot")(State, Match, Overlay)
-loadModule("ui")(State, Match)
+local State      = require(script.src.state)
+local Match      = require(script.src.match)(State)
+local Planner    = require(script.src.planner)(State, Match)
+local Overlay    = require(script.src.overlay)(State)
+local BotActions = require(script.src.bot)(State, Match, Overlay)
+require(script.src.ui)(State, Match)
 
 local RunService          = State.RunService
 local UserInputService    = State.UserInputService
@@ -23,6 +15,43 @@ local Config              = State.Config
 local Bot                 = State.Bot
 local Connections         = State.Connections
 local waitForReaction     = State.waitForReaction
+
+local PoolRemotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Pool")
+
+-- Eventos automáticos de fila, partida e cartas
+task.spawn(function()
+    while Bot.Alive do
+        task.wait(1)
+        pcall(function()
+            if Config.Enabled then
+                local mc = Match.findMC()
+                if not mc then
+                    -- Fila automática (ex: NineBall_Spain)
+                    firesignal(PoolRemotes.OnClientEvent, "Queued", "NineBall_Spain", 0, 550000, 206)
+                    PoolRemotes:FireServer("LocalMatch", true)
+                end
+            end
+        end)
+    end
+end)
+
+-- Escolha automática de cartas no fim da partida
+Connections[#Connections + 1] = PoolRemotes.OnClientEvent:Connect(function(action, data)
+    if action == "CardPicked" then
+        pcall(function()
+            firesignal(PoolRemotes.OnClientEvent, "CardPicked", {
+                Others = {
+                    { Coins = math.random(5000, 7000) },
+                    { Coins = math.random(5000, 7000) }
+                },
+                Tier = "Wood",
+                Id = tostring(math.random(100, 200)),
+                First = false,
+                Reward = { Coins = math.random(5000, 7000) }
+            })
+        end)
+    end
+end)
 
 local function runPendingTask(callback)
     task.spawn(function()
@@ -71,9 +100,7 @@ Connections[#Connections + 1] = RunService.Heartbeat:Connect(function(dt)
         return
     end
     if not Match.myTurn(mc) then
-        Bot.Status = "Opponent's Turn"
-        Bot.Pending = false
-        return
+        Bot.Status = "Opponent's Turn"; Bot.Pending = false; return
     end
 
     if Bot.Pending then return end
@@ -82,11 +109,11 @@ Connections[#Connections + 1] = RunService.Heartbeat:Connect(function(dt)
         Bot.Status = "Placing Ball..."
         Bot.Pending = true
         runPendingTask(function()
-            task.wait(0.4)
+            task.wait(0.2)
             if not Bot.Alive or not Config.Enabled then Bot.Pending = false; return end
             local pos = Planner.planPlacement(mc)
             BotActions.placeBall(mc, pos)
-            task.wait(0.4)
+            task.wait(0.2)
             if mc.Input and mc.Input.State == "BallInHand" then
                 pcall(function() PoolInputController.SetState(mc.Input, "Aiming") end)
             end
@@ -98,7 +125,7 @@ Connections[#Connections + 1] = RunService.Heartbeat:Connect(function(dt)
             local shot = Planner.planShot(mc)
             if shot then
                 BotActions.fireShot(mc, shot)
-                Bot.Cooldown = 2
+                Bot.Cooldown = 1.5
             end
             Bot.Pending = false
         end)
@@ -116,10 +143,10 @@ Connections[#Connections + 1] = RunService.Heartbeat:Connect(function(dt)
             local shot = Planner.planShot(mc)
             if shot then
                 BotActions.fireShot(mc, shot)
-                Bot.Cooldown = 2
+                Bot.Cooldown = 1.5
             else
                 Bot.Status = "No shot found"
-                Bot.Cooldown = 1
+                Bot.Cooldown = 0.5
             end
             Bot.Pending = false
         end)
