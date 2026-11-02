@@ -1,28 +1,21 @@
 -- init.lua
 if _G.__CueBotKill then pcall(_G.__CueBotKill) end
 
+local BASE_URL = "https://raw.githubusercontent.com/eqzyt/8BallDuels/bot-dsc/src/"
+
 local function loadModule(name)
-    local paths = {
-        "src/" .. name .. ".lua",
-        "src\\" .. name .. ".lua",
-        "CueBot/src/" .. name .. ".lua",
-        name .. ".lua"
-    }
-    if isfile and loadfile then
-        for _, p in ipairs(paths) do
-            local ok, exists = pcall(isfile, p)
-            if ok and exists then
-                return loadfile(p)()
-            end
-        end
+    local url = BASE_URL .. name .. ".lua"
+    local ok, content = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if not ok or not content or #content == 0 or content:find("404: Not Found") then
+        error("[CueBot] Falha ao baixar o modulo: " .. name)
     end
-    if typeof(script) == "Instance" then
-        local srcFolder = script:FindFirstChild("src")
-        if srcFolder and srcFolder:FindFirstChild(name) then
-            return require(srcFolder[name])
-        end
+    local fn, err = loadstring(content, "@" .. name .. ".lua")
+    if not fn then
+        error("[CueBot] Erro de sintaxe em " .. name .. ".lua: " .. tostring(err))
     end
-    error("[555] Arquivo '" .. name .. ".lua' nao encontrado! Coloque a pasta 'src' dentro da pasta 'workspace' do seu executor (ou me mande os 6 arquivos aqui no chat para eu juntar tudo em 1 script so).")
+    return fn()
 end
 
 local State      = loadModule("state")
